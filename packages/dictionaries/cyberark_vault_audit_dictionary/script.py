@@ -1,6 +1,12 @@
 from datetime import datetime
 import calendar
+import re
 
+
+_IPV4_REGEX = re.compile(
+    r"^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+    r"(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$"
+)
 
 
 def init(event):
@@ -9,10 +15,11 @@ def init(event):
 
 def criteria(meta):
     return (
-        meta["provider"] == "Microsoft"
-        and meta["group"] == "Windows Events"
-        and meta["type"] == "Audit"
+        meta["provider"] == "CyberArk"
+        and meta["group"] == "PAM"
+        and meta["type"] == "Vault"
     )
+
 
 def drop(event):
     return False
@@ -31,8 +38,17 @@ def timestamp(event):
         return None
 
 
-def message(event):
+def is_ip(value):
 
+    if not value:
+        return False
+
+    value = str(value).strip()
+
+    return _IPV4_REGEX.match(value) is not None
+
+
+def message(event):
 
     action = event.get("act") or event.get("name") or "Unknown Event"
     user = event.get("suser") or "Unknown User"
@@ -45,11 +61,14 @@ def message(event):
             safe = event.get("cs{}".format(i))
             break
 
-    # Preserve important vendor context
+    vendor_name = (event.get("name") or "").lower()
     vendor_msg = (event.get("msg") or "").lower()
 
     if "copy password" in vendor_msg:
         action += " (Copy Password)"
+
+    elif "failure" in vendor_name:
+        action = "Failed " + action
 
     message = "{} by {}".format(action, user)
 
@@ -61,33 +80,40 @@ def message(event):
 
     return message
 
+
 def dictionary(event):
 
     out = {}
-
-
 
     out["event"] = event.get("name")
     out["event_action"] = event.get("act")
     out["event_id"] = event.get("signature_id")
     out["event_severity"] = event.get("severity")
 
-
     out["user_name"] = event.get("suser")
     out["target_user"] = event.get("duser")
 
+    # Network mapping
+    src = event.get("src") or event.get("shost")
 
+    if src:
+        if is_ip(src):
+            out["source_ip"] = src
+        else:
+            out["source_hostname"] = src
 
-    out["source_ip"] = event.get("src") or event.get("shost")
-    out["destination_ip"] = event.get("dst") or event.get("dhost")
+    dst = event.get("dst") or event.get("dhost")
 
+    if dst:
+        if is_ip(dst):
+            out["destination_ip"] = dst
+        else:
+            out["destination_hostname"] = dst
 
     out["applicationname"] = event.get("app")
     out["event.reason"] = event.get("reason")
     out["request_id"] = None
     out["ticket_id"] = None
-
-
 
     for i in range(1, 6):
 
@@ -102,13 +128,11 @@ def dictionary(event):
         if label == "device_type":
             out["device_type"] = value
 
-
         elif label == "database":
             out["dbname"] = value
 
-
-
-
+        elif label == "safe_name":
+            out["safe_name"] = value
 
     for i in range(1, 3):
 
@@ -123,10 +147,6 @@ def dictionary(event):
         if label == "request_id":
             out["token_request_id"] = value
 
-  
-
-    out["message"] = event.get("msg")
+    out["message"] = message(event)
 
     return out
-
-
