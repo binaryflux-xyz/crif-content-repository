@@ -14,6 +14,14 @@ AUDIT_MAIN_REGEX = re.compile(
 
 KV_REGEX = re.compile(r'(\w+)=("[^"]*"|\'[^\']*\'|\S+)')
 
+APP_LOG_REGEX = re.compile(
+    r'^(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2},\d{3})\s+'
+    r'(?P<level>\S+)\s+'
+    r'(?P<application>\S+)\s+'
+    r'\[(?P<thread>[^\]]+)\]'
+    r'(?:\s+(?P<logger>\S+)\s+-)?'
+    r'\s+(?P<message>.*)$'
+)
 
 
 # -----------------------------
@@ -21,6 +29,14 @@ KV_REGEX = re.compile(r'(\w+)=("[^"]*"|\'[^\']*\'|\S+)')
 # -----------------------------
 def parse_syslog(line):
     match = SYSLOG_REGEX.match(line)
+    if not match:
+        return None
+
+    data = match.groupdict()
+    return data
+
+def parse_applog(line):
+    match = APP_LOG_REGEX.match(line)
     if not match:
         return None
 
@@ -108,6 +124,8 @@ def try_parse_line(line, log_type):
     
     if log_type == 'auditd_log':
         return parse_audit(line)
+    elif log_type.startswith('application_log'):
+        return parse_applog(line) #message or secure
     else:
         return parse_syslog(line) #message or secure
 
