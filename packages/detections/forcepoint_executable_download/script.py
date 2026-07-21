@@ -22,6 +22,10 @@ def algorithm(event):
         ".jar",
         ".msi",
         ".iso",
+        ".scr",
+        ".zip",
+        ".hta",
+        ".js",
     )
 
     if file_name.endswith(exec_extensions):

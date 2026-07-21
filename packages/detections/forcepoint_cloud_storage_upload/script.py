@@ -35,8 +35,9 @@ def algorithm(event):
 
     is_cloud_category = category in cloud_categories
     is_cloud_domain = any(d in domain or d in host for d in cloud_domains)
+    bytes_out = event.get("network_bytes_out")
 
-    if is_cloud_category or is_cloud_domain:
+    if (is_cloud_category or is_cloud_domain) and bytes_out and bytes_out > 10000000:
         return 0.75
     return 0.0
 
